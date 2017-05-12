@@ -24,17 +24,14 @@
     @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
 */
 
+#ifndef	_CONST_H_
+#define	_CONST_H_
+
 // server status
 enum server_status {
 	Idle = 0,
 	Working,
 	Closed
-};
-
-char *status_str[] = {
-	"idle",
-	"working",
-	"closed"
 };
 
 // msg type
@@ -47,3 +44,5 @@ enum msg_type {
 	HeartbeatRes,
 	NewWorkConnUdp
 };
+
+#endif

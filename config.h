@@ -38,7 +38,7 @@ struct base_conf{
 	char	*host_header_rewrite;
 	char	*http_username;
 	char	*http_password;
-	char	subdomain;
+	char	*subdomain;
 };
 
 // common config
@@ -51,8 +51,19 @@ struct common_conf {
 	char	*log_level; /* default info */
 	int		log_max_days;	/* default 3 */
 	char	*privilege_token;
+	char	*auth_token;
 	int		heartbeat_interval; /* default 10 */
 	int		heartbeat_timeout;	/* default 30 */
 };
 	
+struct common_conf *get_common_config();
+
+void free_common_config();
+
+void free_base_config(struct base_conf *bconf);
+
+struct proxy_client *get_all_pc();
+
+void load_config(const char *confile);
+
 #endif

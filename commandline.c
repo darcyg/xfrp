@@ -28,14 +28,82 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <signal.h>
 #include <syslog.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
-#include "xkcp_config.h"
+
+#include "config.h"
 #include "commandline.h"
 #include "debug.h"
 #include "version.h"
 
-static void usage(void);
+typedef void signal_func (int);
+
+static signal_func *set_signal_handler (int signo, signal_func * func);
+static void usage(const char *appname);
+
+static int is_daemon = 1;
+
+static char *confile = NULL;
+
+/*
+ * Fork a child process and then kill the parent so make the calling
+ * program a daemon process.
+ */
+static void 
+makedaemon (void)
+{
+	if (fork () != 0)
+			exit (0);
+
+	setsid ();
+	set_signal_handler (SIGHUP, SIG_IGN);
+
+	if (fork () != 0)
+			exit (0);
+
+	umask (0177);
+
+	close (0);
+	close (1);
+	close (2);
+}
+
+/*
+ * Pass a signal number and a signal handling function into this function
+ * to handle signals sent to the process.
+ */
+static signal_func *
+set_signal_handler (int signo, signal_func * func)
+{
+        struct sigaction act, oact;
+
+        act.sa_handler = func;
+        sigemptyset (&act.sa_mask);
+        act.sa_flags = 0;
+        if (signo == SIGALRM) {
+#ifdef SA_INTERRUPT
+                act.sa_flags |= SA_INTERRUPT;   /* SunOS 4.x */
+#endif
+        } else {
+#ifdef SA_RESTART
+                act.sa_flags |= SA_RESTART;     /* SVR4, 4.4BSD */
+#endif
+        }
+
+        if (sigaction (signo, &act, &oact) < 0)
+                return SIG_ERR;
+
+        return oact.sa_handler;
+}
+
+int 
+get_daemon_status()
+{
+	return is_daemon;
+}
 
 /** @internal
  * @brief Print usage
@@ -43,9 +111,9 @@ static void usage(void);
  * Prints usage, called when wifidog is run with -h or with an unknown option
  */
 static void
-usage(void)
+usage(const char *appname)
 {
-    fprintf(stdout, "Usage: xkcp_client [options]\n");
+    fprintf(stdout, "Usage: %s [options]\n", appname);
     fprintf(stdout, "\n");
     fprintf(stdout, "options:\n");
     fprintf(stdout, "  -c [filename] Use this config file\n");
@@ -63,29 +131,27 @@ void
 parse_commandline(int argc, char **argv)
 {
     int c;
-    int i;
-
-    xkcp_config *config = xkcp_get_config();
-
+	int flag = 0;
+	
     while (-1 != (c = getopt(argc, argv, "c:hfd:sw:vx:i:a:"))) {
 
 
         switch (c) {
 
         case 'h':
-            usage();
+            usage(argv[0]);
             exit(1);
             break;
 
         case 'c':
             if (optarg) {
-                free(config->config_file);
-                config->config_file = safe_strdup(optarg);
+				confile = strdup(optarg);          
+				flag = 1;
             }
             break;
 
         case 'f':
-            config->daemon = 0;
+            is_daemon = 0;
             debugconf.log_stderr = 1;
             break;
 
@@ -96,15 +162,26 @@ parse_commandline(int argc, char **argv)
             break;
 
         case 'v':
-            fprintf(stdout, "This is xkcp client version " VERSION "\n");
+            fprintf(stdout, "This is %s version " VERSION "\n", argv[0]);
             exit(1);
             break;
 
         default:
-            usage();
+            usage(argv[0]);
             exit(1);
             break;
 
         }
     }
+	
+	if (!flag) {
+		usage(argv[0]);
+		exit(0);
+	}
+	
+	load_config(confile);
+	
+	if (is_daemon) {
+		makedaemon();
+	}
 }

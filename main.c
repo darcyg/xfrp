@@ -23,3 +23,13 @@
     @brief xfrp client main
     @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
 */
+
+#include "xfrp_client.h"
+#include "commandline.h"
+
+int main(int argc, char **argv)
+{
+	parse_commandline(argc, argv);
+	
+	xfrp_client_loop();
+}

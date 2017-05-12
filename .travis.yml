@@ -1,0 +1,20 @@
+dist: trusty
+sudo: false
+language: c
+
+compiler:
+  - gcc
+
+addons:
+  apt:
+    sources:
+    - sourceline: 'ppa:linuxjedi/ppa'
+    packages:
+    - build-essential
+    - libjson-c-dev
+    - libevent-dev
+    - libopenssl-dev
+
+script:
+  - cmake .
+  - make

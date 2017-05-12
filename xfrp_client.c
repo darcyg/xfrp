@@ -19,50 +19,65 @@
  *                                                                  *
 \********************************************************************/
 
-/** @file msg.h
-    @brief xfrp msg struct
+/** @file xfrp_client.c
+    @brief xfrp client
     @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
 */
 
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <errno.h>
+#include <assert.h>
 
-struct general_response {
-	int		code;
-	char	*msg;
-};
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <errno.h>
 
-// messages between control connections of frpc and frps
-struct control_request {
-	int		type;
-	char	*proxy_name;
-	char	*auth_key;
-	int		use_encryption;
-	int		use_gzip;
-	int		pool_count;
+#include <json-c/json.h>
+
+#include <syslog.h>
+
+#include <event2/bufferevent.h>
+#include <event2/buffer.h>
+#include <event2/listener.h>
+#include <event2/util.h>
+
+#include "commandline.h"
+#include "client.h"
+#include "config.h"
+#include "uthash.h"
+#include "control.h"
+#include "debug.h"
+#include "xfrp_client.h"
+
+static void start_xfrp_client(struct event_base *base)
+{
+	struct proxy_client *all_pc = get_all_pc();
+	struct proxy_client *pc = NULL, *tmp = NULL;
 	
-	int		privilege_mode;
-	char	*privilege_key;
-	char	*proxy_type;
-	int		remote_port;
-	char	*custom_domains;
-	char	*locations;
-	char	*host_header_rewrite;
-	char	*http_username;
-	char	*http_password;
-	char	*subdomain;
-	long	timestamp;
-};
+	debug(LOG_DEBUG, "start xfrp client");
+	
+	HASH_ITER(hh, all_pc, pc, tmp) {
+		debug(LOG_INFO, "start control process %s", pc->bconf->name);
+		pc->base = base;
+		control_process(pc);
+	}
+}
 
-
-struct control_response {
-	int		type;
-	int		code;
-	char	*msg;
-};
-
-// tranlate control request to json string
-int control_request_marshal(const struct control_request *req, char **msg);
-
-// parse json string to control response
-struct control_response *control_response_unmarshal(const char *jres);
-
-void control_response_free(struct control_response *res);
+void xfrp_client_loop()
+{
+	struct event_base *base = NULL;
+	
+	base = event_base_new();
+	if (!base) {
+		debug(LOG_ERR, "event_base_new()");
+		exit(0);
+	}	
+	
+	start_xfrp_client(base);
+		
+	event_base_dispatch(base);
+	
+	event_base_free(base);
+}

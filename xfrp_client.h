@@ -19,50 +19,9 @@
  *                                                                  *
 \********************************************************************/
 
-/** @file msg.h
-    @brief xfrp msg struct
+/** @file xfrp_client.h
+    @brief xfrp client header file
     @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
 */
 
-
-struct general_response {
-	int		code;
-	char	*msg;
-};
-
-// messages between control connections of frpc and frps
-struct control_request {
-	int		type;
-	char	*proxy_name;
-	char	*auth_key;
-	int		use_encryption;
-	int		use_gzip;
-	int		pool_count;
-	
-	int		privilege_mode;
-	char	*privilege_key;
-	char	*proxy_type;
-	int		remote_port;
-	char	*custom_domains;
-	char	*locations;
-	char	*host_header_rewrite;
-	char	*http_username;
-	char	*http_password;
-	char	*subdomain;
-	long	timestamp;
-};
-
-
-struct control_response {
-	int		type;
-	int		code;
-	char	*msg;
-};
-
-// tranlate control request to json string
-int control_request_marshal(const struct control_request *req, char **msg);
-
-// parse json string to control response
-struct control_response *control_response_unmarshal(const char *jres);
-
-void control_response_free(struct control_response *res);
+void xfrp_client_loop();

@@ -19,50 +19,46 @@
  *                                                                  *
 \********************************************************************/
 
-/** @file msg.h
-    @brief xfrp msg struct
+/** @file client.h
+    @brief xfrp client proxy client related
     @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
 */
 
+#ifndef _CLIENT_H_
+#define _CLIENT_H_
 
-struct general_response {
-	int		code;
-	char	*msg;
-};
+#include "uthash.h"
 
-// messages between control connections of frpc and frps
-struct control_request {
-	int		type;
-	char	*proxy_name;
-	char	*auth_key;
-	int		use_encryption;
-	int		use_gzip;
-	int		pool_count;
+struct event_base;
+struct base_conf;
+struct bufferevent;
+struct event;
+
+struct proxy_client {
+	struct event_base 	*base;
+	struct bufferevent	*ctl_bev;
+	struct event		*ev_timeout;
 	
-	int		privilege_mode;
-	char	*privilege_key;
-	char	*proxy_type;
+	struct base_conf	*bconf;
+	char	*name; // pointer to bconf->name
+	char	*local_ip;
+	int		local_port;
 	int		remote_port;
+	
 	char	*custom_domains;
 	char	*locations;
-	char	*host_header_rewrite;
-	char	*http_username;
-	char	*http_password;
-	char	*subdomain;
-	long	timestamp;
+	
+	UT_hash_handle hh;
 };
 
+// after frp server accept client connection request
+// frp server send xfrp client NoticeUserConn request
+// when xfrp client receive that request, it will start
+// frp tunnel
+void start_frp_tunnel(const struct proxy_client *client);
 
-struct control_response {
-	int		type;
-	int		code;
-	char	*msg;
-};
+void del_proxy_client(struct proxy_client *client);
 
-// tranlate control request to json string
-int control_request_marshal(const struct control_request *req, char **msg);
+void free_proxy_client(struct proxy_client *client);
 
-// parse json string to control response
-struct control_response *control_response_unmarshal(const char *jres);
-
-void control_response_free(struct control_response *res);
+#endif
