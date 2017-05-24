@@ -25,6 +25,7 @@
 */
 
 #include <string.h>
+#include <stdio.h>
 #include <json-c/json.h>
 #include <json-c/bits.h>
 
@@ -33,13 +34,16 @@
 
 int control_request_marshal(const struct control_request *req, char **msg)
 {
+	const char *tmp = NULL;
+	int  nret = 0;
 	struct json_object *j_ctl_req = json_object_new_object();
 	if (!j_ctl_req)
 		return 0;
 	
 	json_object_object_add(j_ctl_req, "type", json_object_new_int(req->type));
 	json_object_object_add(j_ctl_req, "proxy_name", json_object_new_string(req->proxy_name));
-	json_object_object_add(j_ctl_req, "auth_key", json_object_new_string(req->auth_key));
+	json_object_object_add(j_ctl_req, "auth_key", 
+						   json_object_new_string(req->auth_key?req->auth_key:""));
 	if (req->type == HeartbeatReq)
 		goto end_process;
 	json_object_object_add(j_ctl_req, "use_encryption", json_object_new_boolean(req->use_encryption));
@@ -48,7 +52,8 @@ int control_request_marshal(const struct control_request *req, char **msg)
 	json_object_object_add(j_ctl_req, "privilege_mode", json_object_new_boolean(req->privilege_mode));
 	json_object_object_add(j_ctl_req, "privilege_key", 
 						   json_object_new_string(req->privilege_key?req->privilege_key:""));
-	json_object_object_add(j_ctl_req, "proxy_type", json_object_new_string(req->proxy_type));
+	json_object_object_add(j_ctl_req, "proxy_type", 
+						   json_object_new_string(req->proxy_type?req->proxy_type:""));
 	json_object_object_add(j_ctl_req, "remote_port", json_object_new_int(req->remote_port));
 	if (!req->custom_domains)
 		json_object_object_add(j_ctl_req, "custom_domains", NULL);
@@ -75,9 +80,13 @@ int control_request_marshal(const struct control_request *req, char **msg)
 	
 	
 end_process:
-	*msg = strdup(json_object_to_json_string(j_ctl_req));
+	tmp = json_object_to_json_string(j_ctl_req);
+	if (tmp && strlen(tmp) > 0) {
+		nret = strlen(tmp);
+		*msg = strdup(tmp);
+	}
 	json_object_put(j_ctl_req);
-	return strlen(*msg);;
+	return nret;
 }
 
 struct control_response *control_response_unmarshal(const char *jres)

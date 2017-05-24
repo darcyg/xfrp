@@ -19,61 +19,22 @@
  *                                                                  *
 \********************************************************************/
 
-/** @file xfrp_client.c
-    @brief xfrp client
+/** @file zip.h
+    @brief zlib related function
     @author Copyright (C) 2016 Dengfeng Liu <liudengfeng@kunteng.org>
 */
 
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <errno.h>
-#include <assert.h>
+#ifndef _ZIP_H_
+#define _ZIP_H_
 
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <errno.h>
+#define CHUNK   16384  
+#define windowBits 		15
+#define GZIP_ENCODING 	16
 
-#include <json-c/json.h>
+typedef unsigned char uint8;
 
-#include <syslog.h>
+int deflate_write(uint8 *source, int len, uint8 **dest, int *wlen, int gzip);
 
-#include <event2/event.h>
+int inflate_read(uint8 *source, int len, uint8 **dest, int *rlen, int gzip);
 
-#include "commandline.h"
-#include "client.h"
-#include "config.h"
-#include "uthash.h"
-#include "control.h"
-#include "debug.h"
-#include "xfrp_client.h"
-
-static void start_xfrp_client(struct event_base *base)
-{
-	struct proxy_client *all_pc = get_all_pc();
-	struct proxy_client *pc = NULL, *tmp = NULL;
-	
-	debug(LOG_INFO, "Start xfrp client");
-	
-	HASH_ITER(hh, all_pc, pc, tmp) {
-		pc->base = base;
-		control_process(pc);
-	}
-}
-
-void xfrp_client_loop()
-{
-	struct event_base *base = NULL;
-	
-	base = event_base_new();
-	if (!base) {
-		debug(LOG_ERR, "event_base_new() error");
-		exit(0);
-	}	
-	
-	start_xfrp_client(base);
-		
-	event_base_dispatch(base);
-	
-	event_base_free(base);
-}
+#endif

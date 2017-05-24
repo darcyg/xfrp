@@ -154,13 +154,21 @@ control_request_free(struct control_request *req)
 	free(req);
 }
 
-void send_msg_frp_server(enum msg_type type, const struct proxy_client *client)
+void send_msg_frp_server(enum msg_type type, const struct proxy_client *client, struct bufferevent *bev)
 {
 	char *msg = NULL;
 	struct control_request *req = get_control_request(type, client); // get control request by client
 	int len = control_request_marshal(req, &msg); // marshal control request to json string
 	assert(msg);
-	bufferevent_write(client->ctl_bev, msg, len);
+	struct bufferevent *bout = NULL;
+	if (bev) {
+		bout = bev;
+	} else {
+		bout = client->ctl_bev;
+	}
+	bufferevent_write(bout, msg, len);
+	bufferevent_write(bout, "\n", 1);
+	debug(LOG_DEBUG, "Send msg to frp server [%s]", msg);
 	free(msg);
 	control_request_free(req); // free control request
 }
@@ -192,7 +200,7 @@ static void hb_sender_cb(evutil_socket_t fd, short event, void *arg)
 {
 	struct proxy_client *client = arg;
 	
-	send_msg_frp_server(HeartbeatReq, client);
+	send_msg_frp_server(HeartbeatReq, client, NULL);
 	
 	set_heartbeat_interval(client->ev_timeout);	
 }
@@ -201,22 +209,6 @@ static void heartbeat_sender(struct proxy_client *client)
 {
 	client->ev_timeout = evtimer_new(client->base, hb_sender_cb, client);
 	set_heartbeat_interval(client->ev_timeout);
-}
-
-static void login_xfrp_event_cb(struct bufferevent *bev, short what, void *ctx)
-{
-	struct proxy_client *client = ctx;
-	if (what & (BEV_EVENT_EOF|BEV_EVENT_ERROR)) {
-		if (client->ctl_bev != bev) {
-			debug(LOG_ERR, "Error: should be equal");
-			bufferevent_free(client->ctl_bev);
-			client->ctl_bev = NULL;
-		}
-		bufferevent_free(bev);
-		free_proxy_client(client);
-	} else if (what & BEV_EVENT_CONNECTED) {
-		send_msg_frp_server(NewCtlConn, client);
-	}
 }
 
 static void process_frp_msg(char *res, struct proxy_client *client)
@@ -253,11 +245,27 @@ static void login_xfrp_read_msg_cb(struct bufferevent *bev, void *ctx)
 	free(buf);
 }
 
-static void login_xfrp_write_msg_cb(struct bufferevent *bev, void *ctx) {
-	struct evbuffer *b = bufferevent_get_output(bev);
-	int len = evbuffer_get_length(b);
-	if (len > 0) {
-		evbuffer_drain(b, len);
+
+static void login_xfrp_event_cb(struct bufferevent *bev, short what, void *ctx)
+{
+	struct proxy_client *client = ctx;
+	struct common_conf 	*c_conf = get_common_config();
+
+	if (what & (BEV_EVENT_EOF|BEV_EVENT_ERROR)) {
+		if (client->ctl_bev != bev) {
+			debug(LOG_ERR, "Error: should be equal");
+			bufferevent_free(client->ctl_bev);
+			client->ctl_bev = NULL;
+		}
+		debug(LOG_ERR, "Proxy [%s]: connect server [%s:%d] error", client->name, c_conf->server_addr, c_conf->server_port);
+		bufferevent_free(bev);
+		free_proxy_client(client);
+	} else if (what & BEV_EVENT_CONNECTED) {
+		debug(LOG_INFO, "Proxy [%s] connected: send msg to frp server", client->name);
+		bufferevent_setcb(bev, login_xfrp_read_msg_cb, NULL, login_xfrp_event_cb, client);
+		bufferevent_enable(bev, EV_READ|EV_WRITE);
+		
+		send_msg_frp_server(NewCtlConn, client, NULL);
 	}
 }
 
@@ -266,15 +274,15 @@ static void login_frp_server(struct proxy_client *client)
 	struct common_conf *c_conf = get_common_config();
 	struct bufferevent *bev = connect_server(client->base, c_conf->server_addr, c_conf->server_port);
 	if (!bev) {
-		debug(LOG_DEBUG, "connect server failed");
+		debug(LOG_DEBUG, "Connect server [%s:%d] failed", c_conf->server_addr, c_conf->server_port);
 		return;
 	}
-	
+
+	debug(LOG_INFO, "Proxy [%s]: connect server [%s:%d] ......", client->name, c_conf->server_addr, c_conf->server_port);
+
 	client->ctl_bev = bev;
-	bufferevent_setcb(bev, login_xfrp_read_msg_cb, login_xfrp_write_msg_cb, login_xfrp_event_cb, client);
-	bufferevent_enable(bev, EV_READ|EV_WRITE);
-	
-	
+	bufferevent_enable(bev, EV_WRITE);
+	bufferevent_setcb(bev, NULL, NULL, login_xfrp_event_cb, client);
 }
 
 void control_process(struct proxy_client *client)
